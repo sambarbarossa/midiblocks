@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MidiBricks Concert Setlist</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Effetto di selezione sulla lista canzoni */
+        .song-item-active {
+            background: linear-gradient(90deg, rgba(59,130,246,0.2) 0%, rgba(30,41,59,0) 100%);
+            border-left: 4px solid #3b82f6;
+        }
+
+        /* Animazione della barra di progresso */
+        @keyframes progress {
+            from { width: 0%; }
+            to { width: 100%; }
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-white overflow-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- ICONE SVG ---
+        const IconPlay = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>;
+        const IconSquare = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>;
+        const IconPlus = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+        const IconTrash = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+        const IconSettings = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
+        const IconMusic = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>;
+        const IconList = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
+        const IconEdit = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
+        const IconWifi = ({ size = 20, className }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>;
+
+        // --- APP PRINCIPALE ---
+        const MidiBricks = () => {
+            // --- STATO GLOBALE ---
+            const [midiAccess, setMidiAccess] = useState(null);
+            const [outputs, setOutputs] = useState([]);
+            const [selectedOutputId, setSelectedOutputId] = useState('');
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [currentBlockIndex, setCurrentBlockIndex] = useState(-1);
+            const [selectedBlockId, setSelectedBlockId] = useState(null);
+
+            // --- STATO SCALETTA (Songs) ---
+            const [songs, setSongs] = useState([
+                { 
+                    id: 1, 
+                    name: "1. Intro - Ambient", 
+                    timeline: [
+                        { id: 101, note: 48, duration: 2000, velocity: 80, channel: 1, color: 'bg-blue-600' },
+                        { id: 102, note: 55, duration: 2000, velocity: 90, channel: 1, color: 'bg-indigo-600' }
+                    ]
+                },
+                { 
+                    id: 2, 
+                    name: "2. Techno Drop", 
+                    timeline: [
+                        { id: 201, note: 36, duration: 250, velocity: 110, channel: 1, color: 'bg-red-600' },
+                        { id: 202, note: 36, duration: 250, velocity: 100, channel: 1, color: 'bg-red-500' },
+                        { id: 203, note: 36, duration: 250, velocity: 110, channel: 1, color: 'bg-red-600' },
+                        { id: 204, note: 36, duration: 250, velocity: 100, channel: 1, color: 'bg-red-500' }
+                    ]
+                }
+            ]);
+            const [currentSongId, setCurrentSongId] = useState(1);
+            const [isRenaming, setIsRenaming] = useState(null); 
+            const [renameText, setRenameText] = useState("");
+
+            // --- COMPUTED VALUES ---
+            const currentSong = songs.find(s => s.id === currentSongId) || songs[0];
+            const timeline = currentSong ? currentSong.timeline : [];
+
+            // --- REFS PER IL PLAYBACK ---
+            const songsRef = useRef(songs);
+            const currentSongIdRef = useRef(currentSongId);
+            const isPlayingRef = useRef(isPlaying);
+            const timerRef = useRef(null);
+
+            // Sincronizzazione Refs
+            useEffect(() => { songsRef.current = songs; }, [songs]);
+            useEffect(() => { currentSongIdRef.current = currentSongId; }, [currentSongId]);
+            useEffect(() => { 
+                isPlayingRef.current = isPlaying; 
+                if (!isPlaying) {
+                    clearTimeout(timerRef.current);
+                    setCurrentBlockIndex(-1);
+                    stopAllNotes();
+                } else {
+                    playNextBlock(0);
+                }
+                return () => clearTimeout(timerRef.current);
+            }, [isPlaying]);
+
+            // --- MIDI SETUP ---
+            useEffect(() => {
+                if (navigator.requestMIDIAccess) {
+                    navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
+                }
+            }, []);
+
+            const onMIDISuccess = (midi) => {
+                setMidiAccess(midi);
+                const updateOutputs = () => {
+                    const outputsArr = Array.from(midi.outputs.values());
+                    setOutputs(outputsArr);
+                    if (outputsArr.length > 0 && !selectedOutputId) setSelectedOutputId(outputsArr[0].id);
+                };
+                updateOutputs();
+                midi.onstatechange = updateOutputs;
+            };
+            const onMIDIFailure = () => console.error("No WebMIDI");
+
+            const sendMidiNote = (note, velocity, channel, duration) => {
+                if (!midiAccess || !selectedOutputId) return;
+                const output = midiAccess.outputs.get(selectedOutputId);
+                if (!output) return;
+                const ch = Math.max(0, Math.min(15, channel - 1));
+                
+                try {
+                    output.send([0x90 + ch, note, velocity]);
+                    setTimeout(() => {
+                        try { output.send([0x80 + ch, note, 0]); } catch(e) {}
+                    }, Math.max(10, duration - 10)); 
+                } catch(e) {}
+            };
+
+            const stopAllNotes = () => {
+                if (!midiAccess || !selectedOutputId) return;
+                const output = midiAccess.outputs.get(selectedOutputId);
+                if (output) {
+                    for (let i = 0; i < 16; i++) output.send([0xB0 + i, 123, 0]);
+                }
+            };
+
+            // --- LOGICA SEQUENCER ---
+            const playNextBlock = (index) => {
+                if (!isPlayingRef.current) return;
+
+                const allSongs = songsRef.current;
+                const activeId = currentSongIdRef.current;
+                const activeSong = allSongs.find(s => s.id === activeId);
+                
+                if (!activeSong) return;
+                const currentTimeline = activeSong.timeline;
+
+                if (index >= currentTimeline.length) {
+                    setIsPlaying(false);
+                    setCurrentBlockIndex(-1);
+                    return;
+                }
+
+                const block = currentTimeline[index];
+                setCurrentBlockIndex(index);
+                sendMidiNote(block.note, block.velocity, block.channel, block.duration);
+
+                timerRef.current = setTimeout(() => {
+                    playNextBlock(index + 1);
+                }, block.duration);
+            };
+
+            // --- GESTIONE SONGS ---
+            const addSong = () => {
+                const newId = Math.max(...songs.map(s => s.id), 0) + 1;
+                const newSong = {
+                    id: newId,
+                    name: `Nuova Canzone ${newId}`,
+                    timeline: [
+                        { id: Date.now(), note: 60, duration: 1000, velocity: 100, channel: 1, color: 'bg-slate-600' }
+                    ]
+                };
+                setSongs([...songs, newSong]);
+                setCurrentSongId(newId);
+                setIsPlaying(false);
+            };
+
+            const deleteSong = (id, e) => {
+                e.stopPropagation();
+                if (songs.length <= 1) return; 
+                const newSongs = songs.filter(s => s.id !== id);
+                setSongs(newSongs);
+                if (currentSongId === id) setCurrentSongId(newSongs[0].id);
+            };
+
+            const startRenaming = (song) => {
+                setIsRenaming(song.id);
+                setRenameText(song.name);
+            };
+
+            const saveRename = () => {
+                if (isRenaming) {
+                    setSongs(songs.map(s => s.id === isRenaming ? { ...s, name: renameText } : s));
+                    setIsRenaming(null);
+                }
+            };
+
+            // --- GESTIONE BLOCCHI ---
+            const updateCurrentTimeline = (newTimeline) => {
+                setSongs(songs.map(s => s.id === currentSongId ? { ...s, timeline: newTimeline } : s));
+            };
+
+            const addBlock = () => {
+                const colors = ['bg-blue-500', 'bg-green-500', 'bg-red-500', 'bg-purple-500', 'bg-orange-500', 'bg-teal-500'];
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                const newBlock = { 
+                    id: Date.now(), 
+                    note: 60, 
+                    duration: 500, 
+                    velocity: 100, 
+                    channel: 1,
+                    color: randomColor
+                };
+                updateCurrentTimeline([...timeline, newBlock]);
+            };
+
+            const updateBlock = (key, value) => {
+                if (!selectedBlockId) return;
+                const newTimeline = timeline.map(b => 
+                    b.id === selectedBlockId ? { ...b, [key]: parseInt(value) } : b
+                );
+                updateCurrentTimeline(newTimeline);
+            };
+
+            const removeBlock = (blockId) => {
+                updateCurrentTimeline(timeline.filter(b => b.id !== blockId));
+                if (selectedBlockId === blockId) setSelectedBlockId(null);
+            };
+
+            const getSelectedBlock = () => timeline.find(b => b.id === selectedBlockId);
+
+            const midiToNoteName = (midi) => {
+                const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                const octave = Math.floor(midi / 12) - 1;
+                return `${notes[midi % 12]}${octave}`;
+            };
+
+            return (
+                <div className="flex h-screen bg-slate-900 text-slate-100 font-sans overflow-hidden">
+                    
+                    {/* COLONNA 1: SCALETTA */}
+                    <div className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col z-20 shadow-xl">
+                        <div className="p-4 border-b border-slate-800 flex items-center gap-2">
+                            <IconList className="text-blue-400" />
+                            <h2 className="font-bold text-lg tracking-wide">SCALETTA</h2>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto">
+                            {songs.map(song => (
+                                <div 
+                                    key={song.id}
+                                    onClick={() => { setCurrentSongId(song.id); setSelectedBlockId(null); setIsPlaying(false); }}
+                                    className={`
+                                        group flex items-center justify-between p-3 cursor-pointer border-b border-slate-800/50 hover:bg-slate-900 transition-colors
+                                        ${song.id === currentSongId ? 'song-item-active bg-slate-900' : 'text-slate-400'}
+                                    `}
+                                >
+                                    {isRenaming === song.id ? (
+                                        <input 
+                                            autoFocus
+                                            type="text" 
+                                            value={renameText}
+                                            onChange={(e) => setRenameText(e.target.value)}
+                                            onBlur={saveRename}
+                                            onKeyDown={(e) => e.key === 'Enter' && saveRename()}
+                                            className="bg-slate-800 text-white text-sm px-2 py-1 rounded w-full outline-none border border-blue-500"
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                    ) : (
+                                        <div className="flex flex-col">
+                                            <span className="font-medium truncate max-w-[140px]">{song.name}</span>
+                                            <span className="text-[10px] opacity-50">{song.timeline.length} blocchi</span>
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={(e) => { e.stopPropagation(); startRenaming(song); }} className="p-1 hover:text-blue-400"><IconEdit size={14}/></button>
+                                        <button onClick={(e) => deleteSong(song.id, e)} className="p-1 hover:text-red-400"><IconTrash size={14}/></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-4 border-t border-slate-800">
+                            <button 
+                                onClick={addSong}
+                                className="w-full py-2 bg-slate-800 hover:bg-slate-700 rounded text-sm font-bold flex items-center justify-center gap-2 transition-colors border border-slate-700"
+                            >
+                                <IconPlus size={16} /> NUOVA CANZONE
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* AREA CENTRALE: TIMELINE EDITOR */}
+                    <div className="flex-1 flex flex-col relative bg-slate-900">
+                        
+                        {/* HEADER TIMELINE */}
+                        <div className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 shadow-sm z-10">
+                            <div className="flex items-center gap-4">
+                                <h1 className="text-xl font-bold text-white truncate max-w-md">
+                                    {currentSong.name}
+                                </h1>
+                                <span className="bg-slate-800 text-xs px-2 py-1 rounded text-slate-400 border border-slate-700">
+                                    {timeline.length} Eventi MIDI
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                {/* MIDI Selector */}
+                                <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
+                                    <IconWifi size={14} className={outputs.length > 0 ? "text-green-400" : "text-red-400"} />
+                                    <select 
+                                        className="bg-transparent text-xs focus:outline-none max-w-[120px] text-slate-300"
+                                        value={selectedOutputId}
+                                        onChange={(e) => setSelectedOutputId(e.target.value)}
+                                    >
+                                        <option value="">No MIDI Output</option>
+                                        {outputs.map(out => (
+                                            <option key={out.id} value={out.id}>{out.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Play Controls */}
+                                <button 
+                                    onClick={() => setIsPlaying(!isPlaying)}
+                                    className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold transition-all ${
+                                        isPlaying 
+                                            ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 text-white' 
+                                            : 'bg-green-500 hover:bg-green-600 shadow-lg shadow-green-500/20 text-white'
+                                    }`}
+                                >
+                                    {isPlaying ? <IconSquare size={16} /> : <IconPlay size={16} />}
+                                    <span>{isPlaying ? "STOP" : "PLAY"}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* TIMELINE VISUALIZZAZIONE */}
+                        <div className="flex-1 overflow-x-auto overflow-y-hidden p-8 relative no-scrollbar">
+                            <div className="flex items-center h-full gap-2 min-w-max pb-20 pt-10">
+                                
+                                <div className="w-4 h-full border-l-2 border-dashed border-slate-700 absolute left-8 top-0 pointer-events-none"></div>
+
+                                {timeline.map((block, index) => (
+                                    <div 
+                                        key={block.id}
+                                        onClick={() => setSelectedBlockId(block.id)}
+                                        className={`
+                                            relative group cursor-pointer transition-all duration-300 ease-out
+                                            flex flex-col justify-center items-center rounded-lg border-2 select-none overflow-hidden
+                                            ${currentBlockIndex === index ? 'scale-110 z-10 border-white shadow-[0_0_30px_rgba(255,255,255,0.2)]' : 'hover:scale-105 border-transparent'}
+                                            ${selectedBlockId === block.id ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900 z-20' : 'opacity-90'}
+                                            ${block.color}
+                                        `}
+                                        style={{
+                                            width: `${Math.max(60, block.duration / 5)}px`, 
+                                            height: '140px'
+                                        }}
+                                    >
+                                        {/* BARRA CURSORE (ANIMAZIONE) */}
+                                        {isPlaying && currentBlockIndex === index && (
+                                            <div 
+                                                className="absolute top-0 left-0 h-full bg-white/40 z-0 pointer-events-none"
+                                                style={{
+                                                    animation: `progress ${block.duration}ms linear forwards`,
+                                                }}
+                                            />
+                                        )}
+
+                                        <span className="relative z-10 text-xl font-bold drop-shadow-md">{midiToNoteName(block.note)}</span>
+                                        <span className="relative z-10 text-[10px] opacity-80 mt-1">{block.duration}ms</span>
+                                        
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); removeBlock(block.id); }}
+                                            className="absolute -top-2 -right-2 bg-slate-900 text-red-500 border border-slate-700 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-20"
+                                        >
+                                            <IconTrash size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+
+                                {/* ADD BUTTON */}
+                                <button 
+                                    onClick={addBlock}
+                                    className="h-[140px] w-16 ml-4 rounded-lg border-2 border-dashed border-slate-700 flex flex-col justify-center items-center hover:bg-slate-800 hover:border-slate-500 hover:text-white transition-colors text-slate-600"
+                                >
+                                    <IconPlus size={24} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* COLONNA 3: PROPRIETÀ */}
+                    <div className="w-72 bg-slate-950 border-l border-slate-800 p-6 flex flex-col gap-6 shadow-xl z-20 overflow-y-auto">
+                        <h2 className="text-sm font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                            <IconSettings size={16} /> Editor Blocco
+                        </h2>
+
+                        {selectedBlockId ? (
+                            <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                                {(() => {
+                                    const block = getSelectedBlock();
+                                    if (!block) return null;
+                                    return (
+                                        <>
+                                            <div className="space-y-2">
+                                                <label className="text-xs text-slate-400 font-bold flex justify-between">
+                                                    <span>NOTA MIDI</span>
+                                                    <span className="text-blue-400">{midiToNoteName(block.note)}</span>
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <input 
+                                                        type="range" min="0" max="127" 
+                                                        value={block.note} 
+                                                        onChange={(e) => updateBlock('note', e.target.value)}
+                                                        className="flex-1 accent-blue-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                                    />
+                                                    <input 
+                                                        type="number" value={block.note} 
+                                                        onChange={(e) => updateBlock('note', e.target.value)}
+                                                        className="w-12 bg-slate-800 border border-slate-700 rounded text-center text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-xs text-slate-400 font-bold">DURATA (ms)</label>
+                                                <div className="flex gap-2">
+                                                    <input 
+                                                        type="range" min="50" max="5000" step="50"
+                                                        value={block.duration} 
+                                                        onChange={(e) => updateBlock('duration', e.target.value)}
+                                                        className="flex-1 accent-purple-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                                    />
+                                                    <input 
+                                                        type="number" value={block.duration} 
+                                                        onChange={(e) => updateBlock('duration', e.target.value)}
+                                                        className="w-16 bg-slate-800 border border-slate-700 rounded text-center text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-xs text-slate-400 font-bold">VELOCITY</label>
+                                                <input 
+                                                    type="range" min="0" max="127" 
+                                                    value={block.velocity} 
+                                                    onChange={(e) => updateBlock('velocity', e.target.value)}
+                                                    className="w-full accent-green-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-xs text-slate-400 font-bold">CANALE (1-16)</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        type="range" min="1" max="16" 
+                                                        value={block.channel} 
+                                                        onChange={(e) => updateBlock('channel', e.target.value)}
+                                                        className="flex-1 accent-orange-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                                    />
+                                                    <span className="text-sm font-mono bg-slate-800 px-2 py-0.5 rounded border border-slate-700">{block.channel}</span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center text-slate-600 text-center p-4 border-2 border-dashed border-slate-800 rounded-xl">
+                                <p className="text-sm">Seleziona un mattoncino per modificarlo.</p>
+                            </div>
+                        )}
+                        
+                        <div className="text-[10px] text-slate-600 pt-4 border-t border-slate-800">
+                            Consiglio: Usa "Nuova Canzone" per separare i brani del concerto.
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<MidiBricks />);
+    </script>
+</body>
+</html>
