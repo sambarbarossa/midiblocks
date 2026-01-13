@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slideshow Rabadan - 5px Border</title>
+    <title>Slideshow Rabadan - Precision Border</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
@@ -27,33 +27,27 @@
             }
         }
 
-        /* Contenitore della foto con bordo */
-        .photo-frame {
+        /* La foto con il bordo che aderisce perfettamente */
+        .photo-element {
             position: absolute;
-            display: flex;
+            max-width: 85%;
+            max-height: 85%;
             transition: opacity 1s ease-in-out;
             animation: linearZoom var(--slide-duration) linear forwards;
-            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.7));
+            filter: drop-shadow(0 12px 25px rgba(0,0,0,0.7));
             pointer-events: none;
             box-sizing: border-box;
-            background-color: white;
+            background-color: white; /* Per gestire eventuali PNG trasparenti */
         }
 
-        /* Bordo 5px su tutti i lati */
-        .frame-active {
-            padding: 5px;
+        /* Bordo 5px preciso sui bordi della foto */
+        .border-active {
+            border: 5px solid white;
         }
 
-        .frame-none {
-            padding: 0;
+        .border-none {
+            border: none;
             background-color: transparent;
-        }
-
-        .slide-content-img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            display: block;
         }
 
         .bg-custom {
@@ -330,42 +324,37 @@
         function renderSlide() {
             if (images.length === 0 || currentIndex < 0) return;
 
-            const photoWrapper = document.createElement('div');
-            photoWrapper.className = 'photo-frame';
+            // Creiamo direttamente l'elemento immagine
+            const imgElement = document.createElement('img');
+            imgElement.src = images[currentIndex];
+            imgElement.className = 'photo-element';
             
+            // Applichiamo il bordo se attivo
             if (frameToggle.checked) {
-                photoWrapper.classList.add('frame-active');
-                // Dimensioni fisse per simulare foto stampate
-                photoWrapper.style.width = '400px';
-                photoWrapper.style.height = '300px';
+                imgElement.classList.add('border-active');
             } else {
-                photoWrapper.classList.add('frame-none');
-                photoWrapper.style.width = '80%';
-                photoWrapper.style.height = '80%';
+                imgElement.classList.add('border-none');
             }
 
-            photoWrapper.style.zIndex = zCounter++;
+            imgElement.style.zIndex = zCounter++;
             
+            // Parametri casuali per l'effetto "sparpagliato"
             const randomRotation = (Math.random() * 30 - 15).toFixed(2);
             const randomX = (Math.random() * 140 - 70).toFixed(0) + 'px';
             const randomY = (Math.random() * 140 - 70).toFixed(0) + 'px';
 
-            photoWrapper.style.setProperty('--random-rotate', `${randomRotation}deg`);
-            photoWrapper.style.setProperty('--random-x', randomX);
-            photoWrapper.style.setProperty('--random-y', randomY);
+            imgElement.style.setProperty('--random-rotate', `${randomRotation}deg`);
+            imgElement.style.setProperty('--random-x', randomX);
+            imgElement.style.setProperty('--random-y', randomY);
             
-            const imgElement = document.createElement('img');
-            imgElement.src = images[currentIndex];
-            imgElement.className = 'slide-content-img';
-            
-            photoWrapper.appendChild(imgElement);
-            photoWrapper.style.opacity = '0';
-            slideContainer.appendChild(photoWrapper);
+            imgElement.style.opacity = '0';
+            slideContainer.appendChild(imgElement);
 
-            const allSlides = slideContainer.querySelectorAll('.photo-frame');
+            // Rimuoviamo le foto vecchie se sono troppe per evitare lag
+            const allSlides = slideContainer.querySelectorAll('.photo-element');
             if (allSlides.length > 30) allSlides[0].remove();
 
-            setTimeout(() => { photoWrapper.style.opacity = '1'; }, 50);
+            setTimeout(() => { imgElement.style.opacity = '1'; }, 50);
             updateUI();
         }
 
