@@ -3,659 +3,468 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MidiBricks Live Sequencer Pro</title>
-    
-    <!-- Tailwind CSS -->
+    <title>Slideshow Rabadan - 5px Border</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
-    <!-- Babel -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- Tone.js MIDI Parser -->
-    <script src="https://unpkg.com/@tonejs/midi"></script>
-
     <style>
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        .song-item-active {
-            background: linear-gradient(90deg, rgba(59,130,246,0.2) 0%, rgba(30,41,59,0) 100%);
-            border-left: 4px solid #3b82f6;
+        :root {
+            --slide-duration: 5000ms;
         }
 
-        @keyframes progress {
-            from { width: 0%; }
-            to { width: 100%; }
+        body {
+            overflow: hidden;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        .guide-pattern {
-            background-color: #1e293b;
-            background-image: repeating-linear-gradient(90deg, #334155 0px, #334155 1px, transparent 1px, transparent 20px);
-            opacity: 0.3;
+        /* Effetto Zoom Lineare Continuo */
+        @keyframes linearZoom {
+            from { 
+                transform: translate(var(--random-x), var(--random-y)) rotate(var(--random-rotate)) scale(1); 
+            }
+            to { 
+                transform: translate(var(--random-x), var(--random-y)) rotate(var(--random-rotate)) scale(1.1); 
+            }
         }
 
-        /* Resize Handle */
-        .resizer {
-            cursor: col-resize;
-            width: 5px;
-            height: 100%;
+        /* Contenitore della foto con bordo */
+        .photo-frame {
             position: absolute;
-            right: 0;
-            top: 0;
-            z-index: 50;
-            background: transparent;
-            transition: background 0.2s;
-        }
-        .resizer:hover, .resizer:active {
-            background: #3b82f6;
+            display: flex;
+            transition: opacity 1s ease-in-out;
+            animation: linearZoom var(--slide-duration) linear forwards;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.7));
+            pointer-events: none;
+            box-sizing: border-box;
+            background-color: white;
         }
 
-        input[type=number]::-webkit-inner-spin-button, 
-        input[type=number]::-webkit-outer-spin-button { 
-            -webkit-appearance: none; 
-            margin: 0; 
+        /* Bordo 5px su tutti i lati */
+        .frame-active {
+            padding: 5px;
+        }
+
+        .frame-none {
+            padding: 0;
+            background-color: transparent;
+        }
+
+        .slide-content-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .bg-custom {
+            background-size: cover;
+            background-position: center;
+            transition: background-image 0.5s ease;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 10px;
+        }
+
+        /* Timeline Bricks */
+        .brick {
+            height: 10px;
+            flex-grow: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: grab;
+        }
+
+        .brick.filled {
+            background: #3b82f6;
+            box-shadow: 0 0 8px #3b82f6;
+        }
+
+        .brick.active {
+            background: #60a5fa;
+            transform: scaleY(1.4);
+        }
+
+        .glass-panel {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Switch Toggle Style */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #4b5563;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px; width: 18px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: #3b82f6; }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        #mainCanvas:fullscreen .controls-overlay {
+            display: none !important;
         }
     </style>
 </head>
-<body class="bg-slate-950 text-white overflow-hidden">
-    <div id="root"></div>
+<body class="h-screen flex flex-col">
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback } = React;
-
-        // --- ICONE ---
-        const IconPlay = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>;
-        const IconSquare = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>;
-        const IconPlus = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
-        const IconTrash = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
-        const IconSettings = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
-        const IconList = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
-        const IconEdit = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
-        const IconWifi = ({ size = 20, className }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>;
-        const IconUpload = ({ size = 20, className = "" }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>;
-        const IconDownload = ({ size = 20, className = "" }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>;
-        const IconFileCode = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M10 13l-2 2 2 2"></path><path d="M14 17l2-2-2-2"></path></svg>;
-        const IconPanelRightClose = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line><path d="M10 15l-3-3 3-3"></path></svg>;
-        const IconPanelRightOpen = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line><path d="M7 15l3-3-3-3"></path></svg>;
-        const IconSkipBack = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>;
-        const IconSkipForward = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>;
-        const IconSave = ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>;
-
-        // --- COLORS PALETTE ---
-        const BLOCK_COLORS = [
-            'bg-emerald-600', 'bg-rose-600', 'bg-sky-600', 
-            'bg-amber-600', 'bg-fuchsia-600', 'bg-indigo-600', 
-            'bg-teal-600', 'bg-orange-600', 'bg-violet-600'
-        ];
-
-        const INITIAL_SONGS = [
-            { 
-                id: 1, 
-                name: "1. Demo Live", 
-                bpm: 120, 
-                guide: null, 
-                tracks: [
-                    {
-                        id: 'track1', name: "Guitar", channel: 1, color: 'blue',
-                        blocks: [{ id: 101, label: "Clean", type: 'pc', data1: 5, data2: 0, sysex: "", bars: 4, beats: 0, color: 'bg-emerald-600' }]
-                    },
-                    {
-                        id: 'track2', name: "Voice", channel: 2, color: 'purple',
-                        blocks: [{ id: 201, label: "Reverb", type: 'note', data1: 60, data2: 100, sysex: "", bars: 8, beats: 0, color: 'bg-rose-600' }]
-                    }
-                ]
-            }
-        ];
-
-        // --- PARSING XML AVANZATO (TEMPO MAP) ---
-        const parseMusicXML = (xmlText) => {
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+    <!-- Container Principale -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- Sidebar Laterale -->
+        <aside class="w-80 sidebar glass-panel p-6 flex flex-col gap-6 overflow-y-auto z-50">
+            <h1 class="text-xl font-bold border-b border-gray-700 pb-2 text-blue-400">Slideshow Rabadan</h1>
             
-            // Trova tutti i cambi di tempo
-            const measureNodes = xmlDoc.querySelectorAll("measure");
-            const tempoMap = []; 
-            let measures = measureNodes.length;
-            let currentBpm = 120;
+            <section class="flex flex-col gap-2">
+                <label class="block text-sm font-medium text-gray-300">Gestione Album</label>
+                <input type="file" id="imageInput" multiple accept="image/*" class="hidden">
+                <button onclick="document.getElementById('imageInput').click()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                    Carica Foto
+                </button>
+                <button onclick="deleteAllImages()" class="w-full bg-red-900/40 hover:bg-red-700 text-red-200 py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm border border-red-800/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    Svuota Tavolo
+                </button>
+            </section>
 
-            // Inserisci BPM di default all'inizio
-            tempoMap.push({ bar: 1, bpm: 120 });
-
-            measureNodes.forEach((measure, index) => {
-                const barNum = index + 1;
-                // Cerca tag <sound tempo="x">
-                const soundTag = measure.querySelector("sound");
-                if (soundTag && soundTag.getAttribute("tempo")) {
-                    const newBpm = Math.round(parseFloat(soundTag.getAttribute("tempo")));
-                    // Aggiorna o aggiungi
-                    const existing = tempoMap.find(t => t.bar === barNum);
-                    if (existing) existing.bpm = newBpm;
-                    else tempoMap.push({ bar: barNum, bpm: newBpm });
-                    currentBpm = newBpm;
-                }
+            <!-- Impostazioni Visualizzazione -->
+            <section class="flex flex-col gap-3">
+                <label class="block text-sm font-medium text-gray-300">Impostazioni</label>
                 
-                // Fallback: cerca <per-minute> dentro direction (standard MusicXML)
-                const perMinute = measure.querySelector("per-minute");
-                if (perMinute) {
-                    const newBpm = Math.round(parseFloat(perMinute.textContent));
-                    const existing = tempoMap.find(t => t.bar === barNum);
-                    if (!existing || existing.bpm !== newBpm) {
-                         if (existing) existing.bpm = newBpm;
-                         else tempoMap.push({ bar: barNum, bpm: newBpm });
-                    }
-                }
-            });
+                <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                    <span class="text-sm text-gray-200">Bordo 5px</span>
+                    <label class="switch">
+                        <input type="checkbox" id="frameToggle" checked onchange="updateUI()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
-            // Ordina e pulisci
-            tempoMap.sort((a, b) => a.bar - b.bar);
-            if (tempoMap[0].bar !== 1) tempoMap.unshift({ bar: 1, bpm: tempoMap[0].bpm });
+                <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                    <span class="text-sm text-gray-200">Loop Automatico</span>
+                    <label class="switch">
+                        <input type="checkbox" id="loopToggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </section>
 
-            // Ritorna il primo BPM come bpm base, ma include la mappa completa
-            return { bpm: tempoMap[0].bpm, measures, tempoMap };
-        };
+            <section>
+                <label class="block text-sm font-medium mb-2 text-gray-300">Velocità Sfoglio: <span id="durationVal">5</span>s</label>
+                <input type="range" id="durationRange" min="2" max="15" value="5" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+            </section>
 
-        const hexToBytes = (hex) => {
-            const clean = hex.replace(/\s+/g, '');
-            const bytes = [];
-            for (let i = 0; i < clean.length; i += 2) bytes.push(parseInt(clean.substr(i, 2), 16));
-            return bytes;
-        };
+            <section>
+                <label class="block text-sm font-medium mb-2 text-gray-300">Sfondo Tavolo</label>
+                <input type="file" id="bgInput" accept="image/*" class="hidden">
+                <button onclick="document.getElementById('bgInput').click()" class="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors text-sm">
+                    Cambia Superficie
+                </button>
+                <button onclick="resetBackground()" class="w-full mt-2 text-xs text-gray-400 hover:text-white underline text-center">Ripristina Legno</button>
+            </section>
 
-        const formatLocation = (totalBeats) => {
-            // totalBeats è 0-based. 
-            // Bar parte da 1. 
-            // Beat parte da 1.
-            const bars = Math.floor(totalBeats / 4) + 1;
-            const beats = (totalBeats % 4) + 1;
-            return `${bars}.${beats}`;
-        };
+            <section class="mt-4">
+                <h2 class="text-sm font-semibold mb-3 text-gray-400 uppercase tracking-wider">Galleria (Trascina)</h2>
+                <div id="thumbnails" class="grid grid-cols-2 gap-2">
+                    <!-- thumbnails via JS -->
+                </div>
+            </section>
+        </aside>
 
-        const MidiBricks = () => {
-            // --- STATE: MIDI SYSTEM & LOGS ---
-            const [midiAccess, setMidiAccess] = useState(null);
-            const [outputs, setOutputs] = useState([]);
-            const [inputs, setInputs] = useState([]);
-            const [selectedOutputId, setSelectedOutputId] = useState('');
-            const [midiMonitor, setMidiMonitor] = useState([]);
-
-            // --- STATE: APP & UI ---
-            const [sidebarWidth, setSidebarWidth] = useState(260);
-            const [isEditorOpen, setIsEditorOpen] = useState(true);
-            const [showSettings, setShowSettings] = useState(false);
-            const [midiSettings, setMidiSettings] = useState(() => {
-                const saved = localStorage.getItem('midiBricksSettings');
-                return saved ? JSON.parse(saved) : {
-                    play: { type: 'cc', channel: 1, val: 4 },
-                    stop: { type: 'cc', channel: 1, val: 1 },
-                    prev: { type: 'cc', channel: 1, val: 2 },
-                    next: { type: 'cc', channel: 1, val: 3 }
-                };
-            });
-
-            // --- STATE: PLAYBACK ---
-            const [isPlaying, setIsPlaying] = useState(false);
-            const [activeIndices, setActiveIndices] = useState({}); // Mappa dinamica: { trackId: blockIndex }
-            const [selectedBlockInfo, setSelectedBlockInfo] = useState({ trackId: null, blockId: null });
-            const [currentLiveBpm, setCurrentLiveBpm] = useState(120);
-
-            // --- STATE: DATA ---
-            const [songs, setSongs] = useState(() => {
-                const saved = localStorage.getItem('midiBricksData');
-                return saved ? JSON.parse(saved) : INITIAL_SONGS;
-            });
-            const [currentSongId, setCurrentSongId] = useState(() => {
-                return songs.length > 0 ? songs[0].id : 1;
-            });
+        <!-- Area Slideshow -->
+        <main id="mainCanvas" class="flex-1 relative bg-custom flex items-center justify-center overflow-hidden">
+            <div id="bgOverlay" class="absolute inset-0 bg-gradient-to-br from-gray-900 to-black z-0 pointer-events-none opacity-80"></div>
             
-            const [renamingSongId, setRenamingSongId] = useState(null); 
-            const [renamingTrackId, setRenamingTrackId] = useState(null);
-            const [renameText, setRenameText] = useState("");
+            <div id="slideContainer" class="relative z-10 w-full h-full flex items-center justify-center pointer-events-none">
+                <div id="emptyMsg" class="text-center z-[999]">
+                    <p class="text-gray-400 text-2xl font-light mb-2">Album Rabadan Vuoto</p>
+                    <p class="text-gray-600 text-sm italic">Carica le tue foto per iniziare</p>
+                </div>
+            </div>
 
-            // --- REFS ---
-            const songsRef = useRef(songs);
-            const currentSongIdRef = useRef(currentSongId);
-            const isPlayingRef = useRef(isPlaying);
-            const midiSettingsRef = useRef(midiSettings);
-            const timeoutsRef = useRef({}); // Mappa dinamica timeouts
-
-            // Sync Refs
-            useEffect(() => { 
-                songsRef.current = songs; 
-                localStorage.setItem('midiBricksData', JSON.stringify(songs));
-            }, [songs]);
-            
-            useEffect(() => { currentSongIdRef.current = currentSongId; }, [currentSongId]);
-            useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
-            useEffect(() => { 
-                midiSettingsRef.current = midiSettings; 
-                localStorage.setItem('midiBricksSettings', JSON.stringify(midiSettings));
-            }, [midiSettings]);
-
-            // --- HELPER TEMPO MAP ---
-            const calculateComplexDuration = (startBar, durationBars, durationBeats, tempoMap) => {
-                // startBar è 1-based (es. 1.0, 4.25)
-                // duration è in bars (float) + beats
+            <div class="controls-overlay absolute bottom-10 flex items-center gap-4 z-[1000]">
+                <button onclick="prevSlide()" class="p-2 bg-black/60 hover:bg-black/80 rounded-full transition text-white border border-white/10">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                </button>
                 
-                const totalDurationBars = durationBars + (durationBeats / 4);
-                const endBar = startBar + totalDurationBars;
-                let totalMs = 0;
+                <button id="playPauseBtn" onclick="togglePlay()" class="p-3 bg-blue-600 hover:bg-blue-500 rounded-full transition text-white shadow-lg">
+                    <svg id="pauseIcon" xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6" /></svg>
+                    <svg id="playIcon" xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
+                </button>
 
-                // Se non c'è mappa, usa BPM base
-                if (!tempoMap || tempoMap.length === 0) return totalDurationBars * 4 * (60000 / 120);
+                <button onclick="nextSlide()" class="p-2 bg-black/60 hover:bg-black/80 rounded-full transition text-white border border-white/10">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                </button>
 
-                // Iteriamo attraverso le sezioni della mappa che intersecano il nostro blocco
-                // Semplificazione: integrazione per battuta intera
-                // Per ogni battuta intera o parziale, troviamo il BPM attivo
-                
-                let currentPos = startBar;
-                while (currentPos < endBar) {
-                    const nextIntegerBar = Math.floor(currentPos) + 1;
-                    // Il segmento dura fino alla fine della battuta corrente, o fino alla fine del blocco
-                    const segmentEnd = Math.min(nextIntegerBar, endBar);
-                    const segmentLengthBars = segmentEnd - currentPos;
-                    
-                    // Trova BPM attivo a currentPos (prendi l'ultimo cambio di tempo <= currentPos)
-                    // Nota: tempoMap usa interi per le bar (1, 5, 17...)
-                    // Troviamo l'ultimo entry dove entry.bar <= currentPos
-                    let activeBpm = tempoMap[0].bpm;
-                    for (let i = 0; i < tempoMap.length; i++) {
-                        if (tempoMap[i].bar <= currentPos) activeBpm = tempoMap[i].bpm;
-                        else break;
-                    }
+                <button onclick="toggleFullscreen()" class="ml-4 p-2 bg-gray-700/60 hover:bg-gray-700 rounded transition text-white" title="Schermo Intero">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                </button>
+            </div>
+        </main>
+    </div>
 
-                    // Aggiungi durata segmento
-                    // 1 Bar = 4 Beats. Ms = Beats * (60000/BPM)
-                    totalMs += (segmentLengthBars * 4) * (60000 / activeBpm);
-                    
-                    currentPos = segmentEnd;
-                }
+    <!-- Timeline -->
+    <footer class="h-20 glass-panel border-t border-gray-700 flex flex-col justify-center px-8 gap-2 z-50">
+        <div id="timeline" class="flex w-full gap-1.5 items-end h-6">
+            <!-- bricks -->
+        </div>
+        <p class="text-[10px] text-center text-gray-500 uppercase tracking-widest">Sequenza Album (Trascina i blocchi per riordinare)</p>
+    </footer>
 
-                return totalMs;
-            };
+    <script>
+        let images = [];
+        let currentIndex = -1;
+        let slideInterval = null;
+        let isPaused = false;
+        let duration = 5000;
+        let zCounter = 10;
+        let draggedIndex = null;
 
-            // --- HELPERS ---
-            const logMidi = (type, msg) => {
-                setMidiMonitor(prev => [{ type, msg, time: new Date().toLocaleTimeString().split(' ')[0] }, ...prev].slice(0, 10));
-            };
+        const imageInput = document.getElementById('imageInput');
+        const bgInput = document.getElementById('bgInput');
+        const slideContainer = document.getElementById('slideContainer');
+        const thumbnails = document.getElementById('thumbnails');
+        const timeline = document.getElementById('timeline');
+        const durationRange = document.getElementById('durationRange');
+        const durationVal = document.getElementById('durationVal');
+        const frameToggle = document.getElementById('frameToggle');
+        const loopToggle = document.getElementById('loopToggle');
+        const mainCanvas = document.getElementById('mainCanvas');
+        const emptyMsg = document.getElementById('emptyMsg');
 
-            const getRandomColor = () => BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
+        // --- Gestione Caricamento ---
+        imageInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
 
-            // --- PLAYBACK ENGINE ---
-            useEffect(() => {
-                if (!isPlaying) {
-                    Object.values(timeoutsRef.current).forEach(t => clearTimeout(t));
-                    setActiveIndices({});
-                    stopAllNotes();
-                } else {
-                    // Start playback for ALL tracks in the current song
-                    const activeSong = songsRef.current.find(s => s.id === currentSongIdRef.current);
-                    if (activeSong) {
-                        activeSong.tracks.forEach(track => {
-                            playTrack(track.id, 0, 1.0);
-                        });
-                    }
-                }
-                return () => {
-                    Object.values(timeoutsRef.current).forEach(t => clearTimeout(t));
-                };
-            }, [isPlaying]);
+            let loadedCount = 0;
+            const wasEmpty = (images.length === 0);
 
-            const playTrack = (trackId, blockIndex, currentStartBar) => {
-                if (!isPlayingRef.current) return;
-
-                const activeSong = songsRef.current.find(s => s.id === currentSongIdRef.current);
-                if (!activeSong) return;
-                const track = activeSong.tracks.find(t => t.id === trackId);
-                if (!track || blockIndex >= track.blocks.length) {
-                    setActiveIndices(prev => ({ ...prev, [trackId]: -1 }));
-                    return;
-                }
-
-                const block = track.blocks[blockIndex];
-                setActiveIndices(prev => ({ ...prev, [trackId]: blockIndex }));
-                
-                // Update Live BPM Display
-                const tempoMap = activeSong.guide?.tempoMap;
-                let activeBpm = activeSong.bpm;
-                if (tempoMap) {
-                    // Trova BPM corrente
-                    for (let i = 0; i < tempoMap.length; i++) {
-                        if (tempoMap[i].bar <= currentStartBar) activeBpm = tempoMap[i].bpm;
-                        else break;
-                    }
-                }
-                setCurrentLiveBpm(activeBpm);
-
-                // Calcola Durata Precisa con BPM Variabile
-                const durationMs = calculateComplexDuration(currentStartBar, block.bars, block.beats, tempoMap || [{bar:1, bpm: activeSong.bpm}]);
-                const durationBarsTotal = block.bars + (block.beats / 4);
-
-                sendMidiMessage(block, track.channel, durationMs);
-
-                timeoutsRef.current[trackId] = setTimeout(() => {
-                    playTrack(trackId, blockIndex + 1, currentStartBar + durationBarsTotal);
-                }, durationMs);
-            };
-
-            // --- MIDI COMMS ---
-            const handleMidiMessage = useCallback((message) => {
-                const [status, data1, data2] = message.data;
-                const cmd = status >> 4;
-                const ch = (status & 0xf) + 1;
-                logMidi('IN', `Ch:${ch} Cmd:${cmd} D1:${data1} D2:${data2}`);
-                
-                const settings = midiSettingsRef.current;
-                const matches = (setting, cmdCode) => {
-                    if (parseInt(setting.channel) !== ch) return false;
-                    let reqCmd = -1;
-                    if (setting.type === 'note') reqCmd = 0x9; 
-                    if (setting.type === 'cc') reqCmd = 0xB;
-                    if (setting.type === 'pc') reqCmd = 0xC;
-                    if (cmd !== reqCmd) return false;
-                    if (parseInt(setting.val) !== data1) return false;
-                    if (setting.type !== 'pc' && data2 < 64) return false; 
-                    return true;
-                };
-
-                if (matches(settings.play, cmd)) setIsPlaying(true);
-                else if (matches(settings.stop, cmd)) setIsPlaying(false);
-                else if (matches(settings.next, cmd)) changeSong(1);
-                else if (matches(settings.prev, cmd)) changeSong(-1);
-            }, []);
-
-            const sendMidiMessage = (block, channel, duration) => {
-                if (!midiAccess || !selectedOutputId) return;
-                const output = midiAccess.outputs.get(selectedOutputId);
-                if (!output) return;
-                const ch = Math.max(0, Math.min(15, channel - 1));
-                logMidi('OUT', `Ch:${channel} ${block.type.toUpperCase()} D1:${block.data1}`);
-                try {
-                    switch (block.type) {
-                        case 'pc': output.send([0xC0 + ch, block.data1]); break;
-                        case 'cc': output.send([0xB0 + ch, block.data1, block.data2]); break;
-                        case 'note': 
-                            output.send([0x90 + ch, block.data1, block.data2]);
-                            setTimeout(() => { try { output.send([0x80 + ch, block.data1, 0]); } catch(e){} }, Math.max(10, duration - 10));
-                            break;
-                        case 'sysex': 
-                            if (block.sysex && block.sysex.trim().length > 0) {
-                                const bytes = hexToBytes(block.sysex);
-                                if (bytes[0] !== 0xF0) bytes.unshift(0xF0);
-                                if (bytes[bytes.length - 1] !== 0xF7) bytes.push(0xF7);
-                                output.send(bytes);
-                            }
-                            break;
-                    }
-                } catch (e) { console.error(e); }
-            };
-
-            const stopAllNotes = () => {
-                if (!midiAccess || !selectedOutputId) return;
-                const output = midiAccess.outputs.get(selectedOutputId);
-                if (output) for (let i = 0; i < 16; i++) output.send([0xB0 + i, 123, 0]);
-            };
-
-            useEffect(() => {
-                if (navigator.requestMIDIAccess) {
-                    navigator.requestMIDIAccess({ sysex: true }).then(m => {
-                        setMidiAccess(m);
-                        const update = () => {
-                            setOutputs(Array.from(m.outputs.values()));
-                            if(m.outputs.size > 0 && !selectedOutputId) setSelectedOutputId(m.outputs.values().next().value.id);
-                        };
-                        update();
-                        const ins = Array.from(m.inputs.values());
-                        setInputs(ins);
-                        ins.forEach(input => input.onmidimessage = handleMidiMessage);
-                        m.onstatechange = (e) => {
-                            update();
-                            if(e.port.type === 'input' && e.port.state === 'connected') e.port.onmidimessage = handleMidiMessage;
-                        };
-                    }, () => console.warn("MIDI permission denied"));
-                }
-            }, [handleMidiMessage]);
-
-            const changeSong = (direction) => {
-                const currentId = currentSongIdRef.current;
-                const idx = songsRef.current.findIndex(s => s.id === currentId);
-                if (idx === -1) return;
-                let newIdx = idx + direction;
-                if (newIdx >= 0 && newIdx < songsRef.current.length) {
-                    setIsPlaying(false); 
-                    setCurrentSongId(songsRef.current[newIdx].id);
-                }
-            };
-
-            // --- DATA UTILS ---
-            const exportData = () => {
-                const blob = new Blob([JSON.stringify(songs, null, 2)], {type: "application/json"});
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.download = `midibricks_setlist.json`;
-                link.href = url;
-                link.click();
-            };
-            const importData = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
+            files.forEach(file => {
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    try {
-                        const loaded = JSON.parse(event.target.result);
-                        if (Array.isArray(loaded)) { setSongs(loaded); setCurrentSongId(loaded[0].id); }
-                    } catch(err) { alert("File non valido"); }
-                };
-                reader.readAsText(file);
-                e.target.value = '';
-            };
-            const handleFileUpload = async (e, type) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const name = file.name.replace(/\.[^/.]+$/, "");
-                const current = songs.find(s => s.id === currentSongId);
-                const shouldRename = (current.name.includes("Nuova") || current.name.includes("Demo") || confirm(`Rinomino in "${name}"?`));
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const content = ev.target.result;
-                    let guide = { type, name: file.name, bpm: 120, measures: 0, tempoMap: [] };
-                    try {
-                        if (type === 'midi') {
-                            const MidiParser = window.Midi || (window.Tone && window.Tone.Midi);
-                            const midi = new MidiParser(content);
-                            const bpm = midi.header.tempos[0]?.bpm || 120;
-                            guide = { ...guide, bpm: Math.round(bpm), measures: Math.ceil(midi.duration / 60 * bpm / 4) };
-                        } else {
-                            const parsed = parseMusicXML(typeof content === 'string' ? content : new TextDecoder().decode(content));
-                            guide = { ...guide, bpm: parsed.bpm, measures: parsed.measures, tempoMap: parsed.tempoMap };
+                    images.push(event.target.result);
+                    loadedCount++;
+                    if (loadedCount === files.length) {
+                        updateUI();
+                        if (wasEmpty) {
+                            currentIndex = 0;
+                            renderSlide();
+                            startSlideshow();
                         }
-                        setSongs(prev => prev.map(s => s.id === currentSongId ? { ...s, guide, name: shouldRename ? name : s.name } : s));
-                    } catch (err) { alert("Errore file"); }
+                    }
                 };
-                type === 'midi' ? reader.readAsArrayBuffer(file) : reader.readAsText(file);
-                e.target.value = '';
-            };
+                reader.readAsDataURL(file);
+            });
+            imageInput.value = ''; 
+        });
 
-            // --- UI HELPERS ---
-            const startResizing = useCallback(() => {
-                const onMouseMove = (e) => setSidebarWidth(Math.max(200, Math.min(600, e.clientX)));
-                const onMouseUp = () => { document.removeEventListener("mousemove", onMouseMove); document.removeEventListener("mouseup", onMouseUp); };
-                document.addEventListener("mousemove", onMouseMove);
-                document.addEventListener("mouseup", onMouseUp);
-            }, []);
+        // --- Drag & Drop ---
+        function onDragStart(index) { draggedIndex = index; }
+        function onDragOver(e) { e.preventDefault(); }
+        function onDrop(targetIndex) {
+            if (draggedIndex === null || draggedIndex === targetIndex) return;
+            const item = images.splice(draggedIndex, 1)[0];
+            images.splice(targetIndex, 0, item);
+            if (draggedIndex === currentIndex) currentIndex = targetIndex;
+            else if (draggedIndex < currentIndex && targetIndex >= currentIndex) currentIndex--;
+            else if (draggedIndex > currentIndex && targetIndex <= currentIndex) currentIndex++;
+            draggedIndex = null;
+            updateUI();
+        }
 
-            const addBlock = (trackId) => setSongs(prev => prev.map(s => s.id !== currentSongId ? s : { ...s, tracks: s.tracks.map(t => t.id === trackId ? { ...t, blocks: [...t.blocks, { id: Date.now(), label: "New", type: 'pc', data1: 0, data2: 0, sysex: "", bars: 4, beats: 0, color: getRandomColor() }] } : t)}));
-            const removeBlock = (trackId, blockId, e) => { e.stopPropagation(); setSongs(prev => prev.map(s => s.id !== currentSongId ? s : { ...s, tracks: s.tracks.map(t => t.id === trackId ? { ...t, blocks: t.blocks.filter(b => b.id !== blockId) } : t) })); setSelectedBlockInfo({trackId:null,blockId:null}); };
-            const updateSelectedBlock = (k, v) => setSongs(prev => prev.map(s => s.id !== currentSongId ? s : { ...s, tracks: s.tracks.map(t => t.id !== selectedBlockInfo.trackId ? t : { ...t, blocks: t.blocks.map(b => b.id === selectedBlockInfo.blockId ? { ...b, [k]: v } : b) })}));
-            const updateMidiSetting = (key, field, val) => setMidiSettings(prev => ({ ...prev, [key]: { ...prev[key], [field]: val } }));
+        // --- Aggiornamento UI ---
+        function updateUI() {
+            thumbnails.innerHTML = '';
+            images.forEach((img, idx) => {
+                const div = document.createElement('div');
+                div.className = `thumb-container relative aspect-square rounded border-2 overflow-hidden cursor-move transition-all ${idx === currentIndex ? 'border-blue-500 ring-2' : 'border-gray-700'}`;
+                div.draggable = true;
+                div.ondragstart = () => onDragStart(idx);
+                div.ondragover = (e) => onDragOver(e);
+                div.ondrop = () => onDrop(idx);
+                div.innerHTML = `<img src="${img}" class="w-full h-full object-cover pointer-events-none">
+                    <button onclick="event.stopPropagation(); deleteImage(${idx})" class="absolute top-1 right-1 bg-red-600/80 p-1 rounded hover:bg-red-500 text-white shadow-md"><svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>`;
+                div.onclick = () => goToSlide(idx);
+                thumbnails.appendChild(div);
+            });
 
-            // --- RENDER ---
-            const currentSong = songs.find(s => s.id === currentSongId) || songs[0];
-            const songBpm = currentSong.guide?.bpm || currentSong.bpm;
-            const selectedBlock = selectedBlockInfo.blockId ? currentSong.tracks.find(t => t.id === selectedBlockInfo.trackId)?.blocks.find(b => b.id === selectedBlockInfo.blockId) : null;
+            timeline.innerHTML = '';
+            images.forEach((_, idx) => {
+                const brick = document.createElement('div');
+                brick.className = `brick ${idx <= currentIndex ? 'filled' : ''} ${idx === currentIndex ? 'active' : ''}`;
+                brick.draggable = true;
+                brick.ondragstart = () => onDragStart(idx);
+                brick.ondragover = (e) => onDragOver(e);
+                brick.ondrop = () => onDrop(idx);
+                brick.onclick = () => goToSlide(idx);
+                timeline.appendChild(brick);
+            });
+            emptyMsg.classList.toggle('hidden', images.length > 0);
+        }
 
-            return (
-                <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
-                    {/* SETTINGS */}
-                    {showSettings && (
-                        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm">
-                            <div className="bg-slate-900 border border-slate-700 p-6 rounded-xl shadow-2xl w-[450px]">
-                                <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><IconSettings/> MIDI Remote Control</h2>
-                                <div className="space-y-4">
-                                    {['play', 'stop', 'prev', 'next'].map(key => (
-                                        <div key={key} className="flex justify-between items-center gap-2">
-                                            <label className="text-sm font-bold w-20 uppercase text-blue-400">{key}</label>
-                                            <select value={midiSettings[key].type} onChange={e=>updateMidiSetting(key, 'type', e.target.value)} className="bg-slate-800 text-[10px] rounded border border-slate-700 p-1"><option value="cc">CC</option><option value="pc">PC</option><option value="note">NOTE</option></select>
-                                            <div className="flex items-center gap-1"><span className="text-[9px] text-slate-500">CH</span><input type="number" min="1" max="16" value={midiSettings[key].channel} onChange={e=>updateMidiSetting(key, 'channel', e.target.value)} className="bg-slate-800 w-10 text-center rounded border border-slate-700 text-xs"/></div>
-                                            <div className="flex items-center gap-1"><span className="text-[9px] text-slate-500">VAL</span><input type="number" value={midiSettings[key].val} onChange={e=>updateMidiSetting(key, 'val', e.target.value)} className="bg-slate-800 w-12 text-center rounded border border-slate-700 text-xs"/></div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <button onClick={() => setShowSettings(false)} className="mt-6 w-full bg-blue-600 hover:bg-blue-500 py-2 rounded font-bold">CHIUDI</button>
-                            </div>
-                        </div>
-                    )}
+        // --- Logica Slideshow ---
+        function renderSlide() {
+            if (images.length === 0 || currentIndex < 0) return;
 
-                    {/* SIDEBAR */}
-                    <div className="relative bg-slate-950 border-r border-slate-800 flex flex-col z-20 shadow-xl" style={{ width: sidebarWidth }}>
-                        <div className="p-4 border-b border-slate-800 flex items-center gap-2"><IconList className="text-blue-400" /><h2 className="font-bold text-lg tracking-wide">SCALETTA</h2></div>
-                        <div className="flex-1 overflow-y-auto">
-                            {songs.map(song => (
-                                <div key={song.id} onClick={() => { setCurrentSongId(song.id); setSelectedBlockInfo({trackId:null,blockId:null}); setIsPlaying(false); }} className={`group flex items-center justify-between p-3 cursor-pointer border-b border-slate-800/50 hover:bg-slate-900 transition-colors ${song.id === currentSongId ? 'song-item-active bg-slate-900' : 'text-slate-400'}`}>
-                                    {renamingSongId === song.id ? <input autoFocus type="text" value={renameText} onChange={e => setRenameText(e.target.value)} onBlur={() => { setSongs(prev => prev.map(s => s.id === song.id ? { ...s, name: renameText } : s)); setRenamingSongId(null); }} onClick={e => e.stopPropagation()} className="bg-slate-800 w-full rounded px-1"/> : <div className="flex flex-col overflow-hidden"><span className="font-medium truncate">{song.name}</span>{song.guide && <span className="text-[10px] text-blue-400 flex items-center gap-1"><IconFileCode size={10}/> {song.guide.measures} Bars</span>}</div>}
-                                    <button onClick={(e) => { e.stopPropagation(); setRenamingSongId(song.id); setRenameText(song.name); }} className="p-1 hover:text-white opacity-0 group-hover:opacity-100"><IconEdit size={14}/></button>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="p-4 border-t border-slate-800 grid grid-cols-2 gap-2">
-                             <button onClick={exportData} className="col-span-2 bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-bold flex items-center justify-center p-2 gap-2 border border-slate-700"><IconSave size={14}/> SALVA SET</button>
-                             <label className="col-span-2 bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-bold flex items-center justify-center p-2 gap-2 cursor-pointer border border-slate-700"><IconDownload size={14}/> CARICA SET<input type="file" accept=".json" className="hidden" onChange={importData} /></label>
-                             <div className="col-span-2 h-px bg-slate-700 my-1"></div>
-                             <label className="bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-bold flex flex-col items-center justify-center p-2 cursor-pointer transition-colors border border-slate-700"><IconUpload size={14} className="mb-1"/> IMPORT MIDI<input type="file" accept=".mid,.midi" className="hidden" onChange={(e) => handleFileUpload(e, 'midi')} /></label>
-                             <label className="bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-bold flex flex-col items-center justify-center p-2 cursor-pointer transition-colors border border-slate-700"><IconUpload size={14} className="mb-1"/> IMPORT XML<input type="file" accept=".xml,.musicxml" className="hidden" onChange={(e) => handleFileUpload(e, 'xml')} /></label>
-                             <button onClick={() => { const newId = Date.now(); setSongs([...songs, { id: newId, name: "Nuova Canzone", bpm: 120, tracks: [{ id: `t1_${newId}`, name: "Guitar", channel: 1, color: "blue", blocks: [] }, { id: `t2_${newId}`, name: "Voice", channel: 2, color: "purple", blocks: [] }] }]); setCurrentSongId(newId); }} className="col-span-2 py-2 bg-blue-900/50 border border-blue-900 text-blue-200 rounded text-xs font-bold flex justify-center gap-2 hover:bg-blue-800/50 mt-2"><IconPlus size={14} /> AGGIUNGI CANZONE</button>
-                        </div>
-                        <div className="resizer" onMouseDown={startResizing}></div>
-                    </div>
+            const photoWrapper = document.createElement('div');
+            photoWrapper.className = 'photo-frame';
+            
+            if (frameToggle.checked) {
+                photoWrapper.classList.add('frame-active');
+                // Dimensioni fisse per simulare foto stampate
+                photoWrapper.style.width = '400px';
+                photoWrapper.style.height = '300px';
+            } else {
+                photoWrapper.classList.add('frame-none');
+                photoWrapper.style.width = '80%';
+                photoWrapper.style.height = '80%';
+            }
 
-                    {/* MAIN */}
-                    <div className="flex-1 flex flex-col relative bg-slate-900 min-w-0">
-                        {/* HEADER */}
-                        <div className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 shadow-sm z-10 shrink-0">
-                            <div className="flex items-center gap-4 overflow-hidden">
-                                <h1 className="text-xl font-bold truncate max-w-xs">{currentSong.name}</h1>
-                                <div className="flex gap-2">
-                                    <span className="bg-slate-800 text-xs px-3 py-1 rounded-full text-blue-300 border border-slate-700 whitespace-nowrap">{songBpm} BPM (Base)</span>
-                                    {isPlaying && currentSong.guide?.tempoMap && <span className="bg-red-900/50 text-xs px-3 py-1 rounded-full text-red-300 border border-red-700 whitespace-nowrap animate-pulse">LIVE: {currentLiveBpm} BPM</span>}
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <select className="bg-slate-800 text-xs px-2 py-1.5 rounded-full border border-slate-700 text-slate-300 outline-none max-w-[120px]" value={selectedOutputId} onChange={(e) => setSelectedOutputId(e.target.value)}><option value="">No Out</option>{outputs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
-                                <div className="flex items-center bg-slate-800 rounded-full p-1 border border-slate-700">
-                                    <button onClick={() => changeSong(-1)} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors" title="Previous"><IconSkipBack size={18}/></button>
-                                    <button onClick={() => setIsPlaying(!isPlaying)} className={`flex items-center gap-2 px-6 py-1.5 rounded-full font-bold transition-all mx-1 ${isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}>{isPlaying ? <IconSquare size={16}/> : <IconPlay size={16}/>}<span className="hidden sm:inline">{isPlaying ? "STOP" : "PLAY"}</span></button>
-                                    <button onClick={() => changeSong(1)} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors" title="Next"><IconSkipForward size={18}/></button>
-                                </div>
-                                <div className="w-px h-6 bg-slate-700 mx-1"></div>
-                                <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><IconSettings size={20}/></button>
-                                <button onClick={() => setIsEditorOpen(!isEditorOpen)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white">{isEditorOpen ? <IconPanelRightClose size={20}/> : <IconPanelRightOpen size={20}/>}</button>
-                            </div>
-                        </div>
+            photoWrapper.style.zIndex = zCounter++;
+            
+            const randomRotation = (Math.random() * 30 - 15).toFixed(2);
+            const randomX = (Math.random() * 140 - 70).toFixed(0) + 'px';
+            const randomY = (Math.random() * 140 - 70).toFixed(0) + 'px';
 
-                        {/* TRACKS */}
-                        <div className="flex-1 overflow-x-auto overflow-y-auto p-6 bg-slate-900/50 relative">
-                            <div className="flex flex-col gap-6 min-w-max mx-auto px-8 pb-20 relative">
-                                <div className="absolute top-0 bottom-0 left-8 w-0 border-l-2 border-dashed border-slate-600 z-0"></div>
-                                {currentSong.guide && <div className="absolute top-0 bottom-0 left-8 guide-pattern z-0 pointer-events-none" style={{ width: `${currentSong.guide.measures * 60}px` }}></div>}
+            photoWrapper.style.setProperty('--random-rotate', `${randomRotation}deg`);
+            photoWrapper.style.setProperty('--random-x', randomX);
+            photoWrapper.style.setProperty('--random-y', randomY);
+            
+            const imgElement = document.createElement('img');
+            imgElement.src = images[currentIndex];
+            imgElement.className = 'slide-content-img';
+            
+            photoWrapper.appendChild(imgElement);
+            photoWrapper.style.opacity = '0';
+            slideContainer.appendChild(photoWrapper);
 
-                                {currentSong.tracks.map(track => {
-                                    let trackAccumulatedQuarters = 0;
-                                    return (
-                                        <div key={track.id} className="flex relative z-10 min-h-[140px]">
-                                            <div className="w-28 flex-shrink-0 flex flex-col justify-center bg-slate-900/90 border-r border-slate-700 pr-3 mr-3 z-20 sticky left-0 rounded-l-lg shadow-lg">
-                                                {renamingTrackId === track.id ? <input autoFocus type="text" value={renameText} onChange={e=>setRenameText(e.target.value)} onBlur={() => { setSongs(prev => prev.map(s => s.id === currentSongId ? { ...s, tracks: s.tracks.map(t => t.id === track.id ? {...t, name: renameText}:t) } : s)); setRenamingTrackId(null); }} className="bg-slate-800 w-full text-xs rounded px-1"/> : <span onClick={() => { setRenamingTrackId(track.id); setRenameText(track.name); }} className={`font-bold text-sm cursor-pointer hover:underline ${track.color === 'blue' ? 'text-blue-400' : 'text-purple-400'}`}>{track.name}</span>}
-                                                <div className="flex items-center gap-1 mt-2"><span className="text-[10px] text-slate-500">CH</span><input type="number" min="1" max="16" value={track.channel} onChange={e => setSongs(prev => prev.map(s => s.id === currentSongId ? { ...s, tracks: s.tracks.map(t => t.id === track.id ? {...t, channel: parseInt(e.target.value)}:t) } : s))} className="w-8 bg-slate-800 border border-slate-700 text-center text-[10px] rounded"/></div>
-                                            </div>
-                                            <div className="flex items-center gap-0.5">
-                                                {track.blocks.map((block, idx) => {
-                                                    const startQuarter = trackAccumulatedQuarters;
-                                                    const durationQuarters = (block.bars * 4) + block.beats;
-                                                    const endQuarter = startQuarter + durationQuarters;
-                                                    const inStr = formatLocation(startQuarter);
-                                                    const outStr = formatLocation(endQuarter);
-                                                    trackAccumulatedQuarters += durationQuarters;
+            const allSlides = slideContainer.querySelectorAll('.photo-frame');
+            if (allSlides.length > 30) allSlides[0].remove();
 
-                                                    return (
-                                                        <div key={block.id} onClick={() => setSelectedBlockInfo({ trackId: track.id, blockId: block.id })}
-                                                            className={`relative group cursor-pointer transition-all duration-200 flex flex-col justify-between p-2 rounded-md border overflow-hidden
-                                                                ${activeIndices[track.id] === idx ? 'border-white ring-2 ring-white/50 brightness-110' : 'border-transparent opacity-90 hover:opacity-100'}
-                                                                ${selectedBlockInfo.blockId === block.id ? 'ring-2 ring-yellow-400 z-10' : ''}
-                                                                ${block.color || (track.color === 'blue' ? 'bg-blue-600' : 'bg-purple-600')}
-                                                            `}
-                                                            style={{ width: `${Math.max(60, (block.bars * 60) + (block.beats * 15))}px`, height: '130px' }}>
-                                                            {isPlaying && activeIndices[track.id] === idx && <div className="absolute top-0 left-0 h-full bg-white/30 pointer-events-none z-0" style={{ animation: `progress ${calculateComplexDuration(parseFloat(inStr), block.bars, block.beats, currentSong.guide?.tempoMap)}ms linear forwards` }} />}
-                                                            
-                                                            <div className="z-10 flex justify-between w-full px-1 absolute top-1 left-0">
-                                                                <span className="text-[9px] font-bold bg-black/60 px-1.5 py-0.5 rounded text-white shadow-sm border border-white/10">{inStr}</span>
-                                                                <span className="text-[9px] font-bold bg-black/60 px-1.5 py-0.5 rounded text-white shadow-sm border border-white/10">{outStr}</span>
-                                                            </div>
+            setTimeout(() => { photoWrapper.style.opacity = '1'; }, 50);
+            updateUI();
+        }
 
-                                                            <div className="z-10 flex flex-col items-center justify-center flex-1 pt-4">
-                                                                <span className="text-lg font-bold drop-shadow-md text-white">{block.label}</span>
-                                                                <span className="text-[10px] uppercase font-mono tracking-tighter opacity-80 mt-1 bg-black/20 px-1 rounded">{block.type === 'pc' ? `PC ${block.data1}` : (block.type==='note' ? `NOTE ${block.data1}` : block.type)}</span>
-                                                            </div>
-                                                            <button onClick={(e) => removeBlock(track.id, block.id, e)} className="absolute bottom-2 right-2 text-white/50 hover:text-white opacity-0 group-hover:opacity-100 z-20"><IconTrash size={12}/></button>
-                                                        </div>
-                                                    );
-                                                })}
-                                                <button onClick={() => addBlock(track.id)} className="h-[130px] w-10 border-2 border-dashed border-slate-700 rounded flex items-center justify-center hover:bg-slate-800 text-slate-600 hover:text-white transition-colors ml-2"><IconPlus size={20}/></button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
+        function nextSlide() {
+            if (images.length === 0) return;
+            
+            if (currentIndex === images.length - 1 && !loopToggle.checked) {
+                if (!isPaused) togglePlay(); 
+                return;
+            }
 
-                        {/* MIDI MONITOR */}
-                        <div className="absolute bottom-4 right-4 w-64 bg-black/80 backdrop-blur-md border border-slate-700 rounded-lg p-2 text-[10px] font-mono shadow-2xl z-40 pointer-events-none">
-                            <div className="font-bold text-slate-400 border-b border-slate-700 mb-1 pb-1">MIDI MONITOR</div>
-                            {midiMonitor.map((m, i) => <div key={i} className={`flex justify-between ${m.type === 'IN' ? 'text-green-400' : 'text-blue-400'}`}><span>{m.type}</span><span>{m.msg}</span></div>)}
-                        </div>
-                    </div>
+            currentIndex = (currentIndex + 1) % images.length;
+            renderSlide();
+        }
 
-                    {/* EDITOR */}
-                    {isEditorOpen && (
-                        <div className="w-[300px] bg-slate-950 border-l border-slate-800 p-6 flex flex-col gap-6 shadow-xl z-20 overflow-y-auto transition-all">
-                            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2"><IconSettings size={16} /> Proprietà</h2>
-                            {selectedBlock ? (
-                                <div className="flex flex-col gap-4 animate-in fade-in duration-300">
-                                    <div className="space-y-1"><label className="text-xs text-slate-400 font-bold">ETICHETTA</label><input type="text" value={selectedBlock.label} onChange={(e) => updateSelectedBlock('label', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 outline-none focus:border-blue-500" /></div>
-                                    <div className="space-y-1"><label className="text-xs text-slate-400 font-bold">TIPO</label><select value={selectedBlock.type} onChange={(e) => updateSelectedBlock('type', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 outline-none"><option value="pc">Program Change</option><option value="cc">Control Change</option><option value="note">Note On/Off</option><option value="sysex">SysEx</option></select></div>
-                                    <div className="bg-slate-900 p-3 rounded border border-slate-800 space-y-3">
-                                        {selectedBlock.type === 'pc' && <div><label className="text-[10px] font-bold text-blue-400">PROGRAM (0-127)</label><input type="number" min="0" max="127" value={selectedBlock.data1} onChange={e=>updateSelectedBlock('data1', parseInt(e.target.value))} className="w-full bg-slate-800 border border-slate-700 rounded text-center"/></div>}
-                                        {selectedBlock.type === 'cc' && <><div><label className="text-[10px] font-bold text-green-400">CC #</label><input type="number" value={selectedBlock.data1} onChange={e=>updateSelectedBlock('data1', parseInt(e.target.value))} className="w-full bg-slate-800 border border-slate-700 rounded text-center"/></div><div><label className="text-[10px] font-bold text-green-400">VALORE</label><input type="range" max="127" value={selectedBlock.data2} onChange={e=>updateSelectedBlock('data2', parseInt(e.target.value))} className="w-full accent-green-500"/></div></>}
-                                        {selectedBlock.type === 'note' && <><div><label className="text-[10px] font-bold text-purple-400">NOTA</label><input type="number" value={selectedBlock.data1} onChange={e=>updateSelectedBlock('data1', parseInt(e.target.value))} className="w-full bg-slate-800 border border-slate-700 rounded text-center"/></div><div><label className="text-[10px] font-bold text-purple-400">VELOCITY</label><input type="range" max="127" value={selectedBlock.data2} onChange={e=>updateSelectedBlock('data2', parseInt(e.target.value))} className="w-full accent-purple-500"/></div></>}
-                                        {selectedBlock.type === 'sysex' && <div><label className="text-[10px] font-bold text-orange-400">HEX STRING</label><textarea value={selectedBlock.sysex} onChange={e=>updateSelectedBlock('sysex', e.target.value)} className="w-full h-20 bg-slate-800 border border-slate-700 rounded p-1 text-[10px] font-mono"/></div>}
-                                    </div>
-                                    <div className="space-y-2 pt-2 border-t border-slate-800">
-                                        <label className="text-xs text-slate-400 font-bold">DURATA (Bars . Beats)</label>
-                                        <div className="flex gap-2"><input type="number" min="0" value={selectedBlock.bars} onChange={e=>updateSelectedBlock('bars', parseInt(e.target.value))} className="w-full bg-slate-800 border border-slate-700 rounded text-center"/><span className="text-xl">.</span><input type="number" min="0" max="3" value={selectedBlock.beats} onChange={e=>updateSelectedBlock('beats', parseInt(e.target.value))} className="w-full bg-slate-800 border border-slate-700 rounded text-center"/></div>
-                                        <div className="flex gap-2 justify-between mt-2">{[4, 8, 16].map(b => <button key={b} onClick={() => updateSelectedBlock('bars', b)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-[10px] py-1 rounded border border-slate-700">{b} BARS</button>)}</div>
-                                    </div>
-                                    <div className="space-y-1 pt-2 border-t border-slate-800"><label className="text-xs text-slate-400 font-bold">COLORE</label><div className="flex flex-wrap gap-2">{BLOCK_COLORS.map(c => <div key={c} onClick={() => updateSelectedBlock('color', c)} className={`w-6 h-6 rounded-full cursor-pointer ${c} ${selectedBlock.color === c ? 'ring-2 ring-white' : ''}`}></div>)}</div></div>
-                                </div>
-                            ) : <div className="flex-1 flex flex-col items-center justify-center text-slate-600 text-center border-2 border-dashed border-slate-800 rounded-xl"><p className="text-sm">Seleziona un blocco</p></div>}
-                        </div>
-                    )}
-                </div>
-            );
-        };
+        function prevSlide() {
+            if (images.length === 0) return;
+            currentIndex = (currentIndex - 1 + images.length) % images.length;
+            renderSlide();
+        }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<MidiBricks />);
+        function goToSlide(index) {
+            currentIndex = index;
+            renderSlide();
+            if (!isPaused) startSlideshow();
+        }
+
+        function startSlideshow() {
+            if (images.length < 1 || isPaused) return;
+            if (slideInterval) clearInterval(slideInterval);
+            slideInterval = setInterval(nextSlide, duration);
+        }
+
+        function togglePlay() {
+            isPaused = !isPaused;
+            document.getElementById('pauseIcon').classList.toggle('hidden', isPaused);
+            document.getElementById('playIcon').classList.toggle('hidden', !isPaused);
+            if (isPaused) {
+                clearInterval(slideInterval);
+                slideInterval = null;
+            } else {
+                startSlideshow();
+            }
+        }
+
+        function deleteImage(index) {
+            images.splice(index, 1);
+            if (images.length === 0) {
+                clearInterval(slideInterval);
+                slideInterval = null;
+                currentIndex = -1;
+                slideContainer.innerHTML = '';
+                slideContainer.appendChild(emptyMsg);
+            } else {
+                if (currentIndex >= images.length) currentIndex = images.length - 1;
+            }
+            updateUI();
+        }
+
+        function deleteAllImages() {
+            images = [];
+            clearInterval(slideInterval);
+            slideInterval = null;
+            currentIndex = -1;
+            slideContainer.innerHTML = '';
+            slideContainer.appendChild(emptyMsg);
+            updateUI();
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) mainCanvas.requestFullscreen();
+            else document.exitFullscreen();
+        }
+
+        bgInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    mainCanvas.style.backgroundImage = `url(${event.target.result})`;
+                    document.getElementById('bgOverlay').style.opacity = '0.4';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function resetBackground() {
+            mainCanvas.style.backgroundImage = 'none';
+            document.getElementById('bgOverlay').style.opacity = '0.8';
+        }
+
+        durationRange.addEventListener('input', (e) => {
+            duration = parseInt(e.target.value) * 1000;
+            durationVal.innerText = e.target.value;
+            document.documentElement.style.setProperty('--slide-duration', `${duration}ms`);
+            if (!isPaused && images.length > 0) startSlideshow();
+        });
+
+        document.documentElement.style.setProperty('--slide-duration', `${duration}ms`);
     </script>
 </body>
 </html>
